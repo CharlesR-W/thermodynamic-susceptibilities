@@ -92,7 +92,8 @@ def main() -> None:
             configs = configs[: args.max_configs]
             metadata["max_configs"] = args.max_configs
         arrays = load_mnist_arrays(max_train=max_train, n_val=n_val, seed=args.data_seed)
-        metadata["mnist_source"] = arrays["source"]
+        metadata["mnist_source"] = "cached MNIST IDX files"
+        metadata["mnist_source_hint"] = "Set MNIST_RAW_DIR or place IDX files under data/MNIST/raw."
         metadata["mnist_max_train"] = max_train
         metadata["mnist_n_val"] = n_val
         metadata["neural_config_count"] = len(configs)

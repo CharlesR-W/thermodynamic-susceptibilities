@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import gzip
+import os
 import struct
 from pathlib import Path
 
 import numpy as np
 
 
-MNIST_RAW_CANDIDATES = [
-    Path("data/MNIST/raw"),
-    Path("/home/crw/Programming/Experiments/gradient_dmd/data/MNIST/raw"),
-    Path("/home/crw/Programming/Experiments/hessian-dendrogram/data/MNIST/raw"),
-    Path("/home/crw/Programming/Claude/tutorials/numerical-linalg-for-ml/data/MNIST/raw"),
-]
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def default_mnist_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    env_root = os.environ.get("MNIST_RAW_DIR")
+    if env_root:
+        candidates.append(Path(env_root))
+    candidates.append(ROOT / "data" / "MNIST" / "raw")
+    candidates.extend(sorted(ROOT.parent.glob("*/data/MNIST/raw")))
+    return candidates
 
 
 def _open_idx(path: Path):
@@ -47,7 +53,7 @@ def find_mnist_raw(extra_root: str | Path | None = None) -> Path:
     if extra_root is not None:
         root = Path(extra_root)
         candidates.extend([root, root / "MNIST" / "raw", root / "data" / "MNIST" / "raw"])
-    candidates.extend(MNIST_RAW_CANDIDATES)
+    candidates.extend(default_mnist_candidates())
     for root in candidates:
         if (root / "train-images-idx3-ubyte").exists() or (
             root / "train-images-idx3-ubyte.gz"
