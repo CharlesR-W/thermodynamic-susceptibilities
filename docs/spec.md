@@ -3,10 +3,14 @@
 ## One-Sentence Summary
 
 This is a finite MNIST pilot for the idea that neural-network "capacity" can be
-treated as a constrained resource, with a Lagrange multiplier acting as a
-susceptibility or shadow price. The current run is useful mainly because it is
-not a clean success: data and width responses are visible, but the direct
-weight-decay response is too weak to justify a phase-boundary claim.
+treated as a constrained resource, with Lagrange multipliers acting as
+susceptibilities or shadow prices. The larger aim is to put heterogeneous
+regularizers on a common footing: norm budgets, rank constraints, sparsity,
+noise robustness, and architecture choices should all have comparable conjugate
+fields if they can be written as softened constraints. The current run is
+useful mainly because it is not a clean success: data and width responses are
+visible, but the direct weight-decay response is too weak to justify a
+phase-boundary claim.
 
 ## The Capacity Hypothesis
 
@@ -56,6 +60,70 @@ near-zero or constant predictor. In that limit the task-specific capacity should
 go to zero. Equivalently, an extremely large additive L2 penalty should destroy
 the network's ability to fit MNIST.
 
+## Why This Is More Than L2
+
+The real motivation is that the multiplier language gives a level playing field
+for regularization. For each proposed regularizer or architectural bottleneck,
+choose an observable $q_a(w)$ and a budget $B_a$:
+
+$$
+\mathbb{E}[q_a]=B_a.
+$$
+
+Then the conjugate multiplier $\lambda_a$ says how expensive that constraint is
+for the task. This suggests comparing constraints by response rather than by
+their native units. Examples include:
+
+- weight scale, such as $\lVert w\rVert_2^2$;
+- spectral norm, nuclear norm, effective rank, or singular-value decay;
+- activation sparsity, dead-unit fraction, or mask entropy;
+- input noise, weight noise, dropout, or augmentation strength;
+- architectural bottlenecks such as width, rank, attention head count, or
+  low-rank adapters.
+
+The hope is that different microscopic constraints may collapse onto a smaller
+set of macroscopic response laws. That is the sense in which this could become
+"thermodynamics": not a metaphor for one plot, but a search for universality
+classes across constraint families.
+
+## Ensembles And MaxEnt Softening
+
+The more thermodynamic object is an ensemble of networks, not a single trained
+network. Hard constraints can be softened into expectation constraints. For a
+distribution $p(w)$ over networks, a maximum-entropy problem has the form
+
+$$
+\max_p H[p]
+\quad\text{subject to}\quad
+\mathbb{E}_p[L(w)]=E,\qquad
+\mathbb{E}_p[q_a(w)]=B_a.
+$$
+
+The solution is a Gibbs family
+
+$$
+p(w)
+\propto
+\exp\left[-\beta L(w)-\sum_a \lambda_a q_a(w)\right],
+$$
+
+with
+
+$$
+\mathbb{E}_p[q_a(w)]=B_a.
+$$
+
+In this form, $\lambda_a$ is literally the field conjugate to observable $q_a$.
+For $q(w)=\lVert w\rVert_2^2$, the max-entropy distribution with only an
+expected norm constraint is Gaussian-like. With a loss term included, it becomes
+a Gibbs posterior or regularized ensemble. This version may be analytically
+tractable in local quadratic, NTK, Laplace, or other linearized regimes.
+
+This is also the route for non-smooth constraints. "Rank equals $R$" is a hard
+architectural condition, but nuclear norm, effective rank, spectral entropy, or
+singular-value temperature are softened observables. They can have conjugate
+fields and derivatives even when the original architecture switch is discrete.
+
 ## Penalties Versus Constraints
 
 The penalty form
@@ -81,6 +149,62 @@ training. This matters a lot for the "super-heavy L2 should zero capacity"
 claim: that limiting claim requires either a true additive-L2 sweep or an
 explicit norm-constrained solve, and a much wider regularization path than this
 local run used.
+
+Noise regularization fits the same template but with a different observable. If
+input or weight perturbations are sampled from a noise distribution, the
+effective risk is
+
+$$
+R_\sigma(w)
+=
+\mathbb{E}_{\epsilon}
+\left[\ell(f_{w+\epsilon_w}(x+\epsilon_x),y)\right].
+$$
+
+The noise scale $\sigma$ is then a field controlling robustness. For small
+noise, Taylor expansion turns this into curvature or Jacobian-like penalties,
+which may be easier to linearize and compare with norm or rank constraints.
+
+## Coordinate And Parameterization Caveats
+
+The current report uses log-scale finite differences because "one more unit" of
+data, width, or weight decay is not a comparable perturbation. This is a
+practical normalization, not a principled invariant.
+
+A more invariant response would differentiate with respect to the budget itself:
+
+$$
+\mu_a=-\frac{\partial R^*}{\partial B_a}.
+$$
+
+For scale-like budgets, a dimensionless elasticity may be more comparable:
+
+$$
+\chi_a
+=
+-\frac{\partial R^*}{\partial \log B_a}
+=
+B_a\mu_a.
+$$
+
+In the ensemble picture, the local geometry is supplied by the covariance matrix
+of observables,
+
+$$
+g_{ab}=\operatorname{Cov}_p(q_a,q_b),
+$$
+
+which is also the Fisher information matrix of the exponential family. This is
+a candidate way to compare constraint directions after whitening by their
+natural fluctuations.
+
+Neural networks add a further problem: many parameterizations represent the same
+function. Raw L2 norm is not invariant under common symmetries such as ReLU
+rescalings across layers. Better candidates may include path norms, spectral
+quantities, function-space KL/Fisher distance, NTK-local coordinates, or
+constraints on predictions and representations rather than raw weights. This is
+one of the main theoretical issues a serious version of the program has to
+solve.
 
 ## What This Run Actually Measures
 

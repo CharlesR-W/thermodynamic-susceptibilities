@@ -154,7 +154,8 @@ pre, .math-block {
   <div class="grid">
     <div class="panel wide">
       <h3>What This Is Testing</h3>
-      <p class="lead">The motivating idea is to define neural-network capacity by a constrained optimization problem, then read the Lagrange multiplier as a susceptibility or shadow price. If a norm budget is a real capacity constraint, tightening that budget should eventually make the task impossible; in the extreme, very heavy L2 regularization should collapse the network toward a near-zero/constant predictor and drive task capacity to zero.</p>
+      <p class="lead">The motivating idea is to define neural-network capacity by a constrained optimization problem, then read the Lagrange multiplier as a susceptibility or shadow price. The point is not that Lagrange multipliers are new; it is that they give a common currency for comparing many different regularizers. Weight norm, rank, activation sparsity, noise robustness, and architectural bottlenecks can all be phrased as constraints with conjugate fields.</p>
+      <p class="lead">If a norm budget is a real capacity constraint, tightening that budget should eventually make the task impossible; in the extreme, very heavy L2 regularization should collapse the network toward a near-zero/constant predictor and drive task capacity to zero.</p>
       <p class="lead">This MNIST run is a small empirical probe of that idea. It asks whether validation risk has a stable response to data size, hidden width, and weight decay, and whether the weight-decay direction has enough signal to behave like a meaningful capacity field.</p>
     </div>
     <div class="panel">
@@ -164,10 +165,26 @@ pre, .math-block {
       <p class="note">Here <code>mu*</code> is the shadow price of capacity: how much validation risk would fall if the allowed norm budget were relaxed. A penalty form <code>R(w)+lambda ||w||^2/2</code> is the Lagrangian proxy, so the response to <code>lambda</code> should reveal whether norm is acting like a real capacity bottleneck.</p>
     </div>
     <div class="panel">
+      <h3>Ensemble View</h3>
+      <p class="note">The more thermodynamic version is not one trained network but an ensemble over networks. Hard constraints become expectation constraints, e.g. <code>E_p[||w||^2]=B</code>. A max-entropy problem then gives a Gibbs family:</p>
+      <div class="formula">$$\begin{aligned}p(w)&\propto \exp\left[-\beta L(w)-\sum_a \lambda_a q_a(w)\right],\\\mathbb{E}_p[q_a]&=B_a.\end{aligned}$$</div>
+      <p class="note">This is attractive because very different regularizers become observables <code>q_a</code> with comparable conjugate fields <code>lambda_a</code>. Rank constraints, spectral penalties, dropout/noise robustness, and input or weight noise can all be studied as softened ensemble constraints if the observable is chosen carefully.</p>
+    </div>
+    <div class="panel">
+      <h3>Architectural Constraints</h3>
+      <p class="note">Some capacity controls are not smooth scalar penalties at first. Fixing a matrix rank, width, sparsity pattern, or attention bottleneck is closer to changing the architecture. The possible bridge is to replace the hard constraint by a softened observable, such as nuclear norm, effective rank, spectral decay, mask entropy, or expected active units.</p>
+      <p class="note">That softening is analytically useful because it may make the field differentiable, support local linearization, and expose universality classes: different microscopic regularizers could have the same coarse response law.</p>
+    </div>
+    <div class="panel">
       <h3>Empirical Proxy</h3>
       <p class="note">The actual sweep measures validation cross-entropy <code>R(N,W,lambda)</code> after scratch retraining. The plotted fields are finite differences in log coordinates:</p>
       <div class="formula">$$\begin{aligned}h_N&=-\frac{\partial R}{\partial\log_2 N},\\h_P&=-\frac{\partial R}{\partial\log_2 P},\\h_\lambda&=-\frac{\partial R}{\partial\log_{10}\lambda}.\end{aligned}$$</div>
       <p class="note">Positive <code>h_N</code> means another data doubling helps. Positive <code>h_P</code> means another parameter doubling helps. Positive <code>h_lambda</code> means stronger weight decay helps locally; negative <code>h_lambda</code> means it hurts.</p>
+    </div>
+    <div class="panel">
+      <h3>Coordinate Caveat</h3>
+      <p class="note">The current log-scale derivatives are a practical normalization, not a principled invariant. A cleaner comparison would use responses to constraint budgets themselves, for example <code>-dR*/dB</code> or the dimensionless elasticity <code>-dR*/d log B = B mu*</code>.</p>
+      <p class="note">For ensembles, the natural local geometry is the covariance/Fisher matrix of observables, <code>Cov_p(q_a,q_b)</code>. For networks, parameterization symmetries make raw L2 especially suspect; path norms, spectral quantities, Fisher/KL distances in function space, or NTK-local coordinates may be better candidates.</p>
     </div>
     <div class="panel wide">
       <h3>Current Verdict</h3>
@@ -198,7 +215,7 @@ pre, .math-block {
 <section id="spec" class="tab">
   <div class="panel"><h1>Thermodynamic Susceptibilities for Learning Systems</h1>
 <h2>One-Sentence Summary</h2>
-<p>This is a finite MNIST pilot for the idea that neural-network &quot;capacity&quot; can be treated as a constrained resource, with a Lagrange multiplier acting as a susceptibility or shadow price. The current run is useful mainly because it is not a clean success: data and width responses are visible, but the direct weight-decay response is too weak to justify a phase-boundary claim.</p>
+<p>This is a finite MNIST pilot for the idea that neural-network &quot;capacity&quot; can be treated as a constrained resource, with Lagrange multipliers acting as susceptibilities or shadow prices. The larger aim is to put heterogeneous regularizers on a common footing: norm budgets, rank constraints, sparsity, noise robustness, and architecture choices should all have comparable conjugate fields if they can be written as softened constraints. The current run is useful mainly because it is not a clean success: data and width responses are visible, but the direct weight-decay response is too weak to justify a phase-boundary claim.</p>
 <h2>The Capacity Hypothesis</h2>
 <p>The intended mathematical object is a constrained risk problem. Let</p>
 <div class="math-block">$$
@@ -225,6 +242,40 @@ $$</div>
 $$</div>
 <p>So the multiplier $\mu^*$ is a shadow price of capacity: it measures how much risk would fall if the norm budget were relaxed. This is the reason the susceptibility language is interesting. A capacity definition is not just &quot;larger model good&quot;; it is a response curve saying how much the task benefits from marginally relaxing a constraint.</p>
 <p>The limiting sanity check is also clear. If the constraint is genuinely an L2 capacity budget, then as $B\to 0$ the network should collapse toward a near-zero or constant predictor. In that limit the task-specific capacity should go to zero. Equivalently, an extremely large additive L2 penalty should destroy the network&#x27;s ability to fit MNIST.</p>
+<h2>Why This Is More Than L2</h2>
+<p>The real motivation is that the multiplier language gives a level playing field for regularization. For each proposed regularizer or architectural bottleneck, choose an observable $q_a(w)$ and a budget $B_a$:</p>
+<div class="math-block">$$
+\mathbb{E}[q_a]=B_a.
+$$</div>
+<p>Then the conjugate multiplier $\lambda_a$ says how expensive that constraint is for the task. This suggests comparing constraints by response rather than by their native units. Examples include:</p>
+<ul>
+<li>weight scale, such as $\lVert w\rVert_2^2$;</li>
+<li>spectral norm, nuclear norm, effective rank, or singular-value decay;</li>
+<li>activation sparsity, dead-unit fraction, or mask entropy;</li>
+<li>input noise, weight noise, dropout, or augmentation strength;</li>
+<li>architectural bottlenecks such as width, rank, attention head count, or low-rank adapters.</li>
+</ul>
+<p>The hope is that different microscopic constraints may collapse onto a smaller set of macroscopic response laws. That is the sense in which this could become &quot;thermodynamics&quot;: not a metaphor for one plot, but a search for universality classes across constraint families.</p>
+<h2>Ensembles And MaxEnt Softening</h2>
+<p>The more thermodynamic object is an ensemble of networks, not a single trained network. Hard constraints can be softened into expectation constraints. For a distribution $p(w)$ over networks, a maximum-entropy problem has the form</p>
+<div class="math-block">$$
+\max_p H[p]
+\quad\text{subject to}\quad
+\mathbb{E}_p[L(w)]=E,\qquad
+\mathbb{E}_p[q_a(w)]=B_a.
+$$</div>
+<p>The solution is a Gibbs family</p>
+<div class="math-block">$$
+p(w)
+\propto
+\exp\left[-\beta L(w)-\sum_a \lambda_a q_a(w)\right],
+$$</div>
+<p>with</p>
+<div class="math-block">$$
+\mathbb{E}_p[q_a(w)]=B_a.
+$$</div>
+<p>In this form, $\lambda_a$ is literally the field conjugate to observable $q_a$. For $q(w)=\lVert w\rVert_2^2$, the max-entropy distribution with only an expected norm constraint is Gaussian-like. With a loss term included, it becomes a Gibbs posterior or regularized ensemble. This version may be analytically tractable in local quadratic, NTK, Laplace, or other linearized regimes.</p>
+<p>This is also the route for non-smooth constraints. &quot;Rank equals $R$&quot; is a hard architectural condition, but nuclear norm, effective rank, spectral entropy, or singular-value temperature are softened observables. They can have conjugate fields and derivatives even when the original architecture switch is discrete.</p>
 <h2>Penalties Versus Constraints</h2>
 <p>The penalty form</p>
 <div class="math-block">$$
@@ -236,6 +287,34 @@ $$</div>
 \frac{\lambda}{2}\lVert w\rVert_2^2
 $$</div>
 <p>therefore helps check scale, but it is not the exact objective optimized during training. This matters a lot for the &quot;super-heavy L2 should zero capacity&quot; claim: that limiting claim requires either a true additive-L2 sweep or an explicit norm-constrained solve, and a much wider regularization path than this local run used.</p>
+<p>Noise regularization fits the same template but with a different observable. If input or weight perturbations are sampled from a noise distribution, the effective risk is</p>
+<div class="math-block">$$
+R_\sigma(w)
+=
+\mathbb{E}_{\epsilon}
+\left[\ell(f_{w+\epsilon_w}(x+\epsilon_x),y)\right].
+$$</div>
+<p>The noise scale $\sigma$ is then a field controlling robustness. For small noise, Taylor expansion turns this into curvature or Jacobian-like penalties, which may be easier to linearize and compare with norm or rank constraints.</p>
+<h2>Coordinate And Parameterization Caveats</h2>
+<p>The current report uses log-scale finite differences because &quot;one more unit&quot; of data, width, or weight decay is not a comparable perturbation. This is a practical normalization, not a principled invariant.</p>
+<p>A more invariant response would differentiate with respect to the budget itself:</p>
+<div class="math-block">$$
+\mu_a=-\frac{\partial R^*}{\partial B_a}.
+$$</div>
+<p>For scale-like budgets, a dimensionless elasticity may be more comparable:</p>
+<div class="math-block">$$
+\chi_a
+=
+-\frac{\partial R^*}{\partial \log B_a}
+=
+B_a\mu_a.
+$$</div>
+<p>In the ensemble picture, the local geometry is supplied by the covariance matrix of observables,</p>
+<div class="math-block">$$
+g_{ab}=\operatorname{Cov}_p(q_a,q_b),
+$$</div>
+<p>which is also the Fisher information matrix of the exponential family. This is a candidate way to compare constraint directions after whitening by their natural fluctuations.</p>
+<p>Neural networks add a further problem: many parameterizations represent the same function. Raw L2 norm is not invariant under common symmetries such as ReLU rescalings across layers. Better candidates may include path norms, spectral quantities, function-space KL/Fisher distance, NTK-local coordinates, or constraints on predictions and representations rather than raw weights. This is one of the main theoretical issues a serious version of the program has to solve.</p>
 <h2>What This Run Actually Measures</h2>
 <p>The empirical potential in the report is validation cross-entropy</p>
 <div class="math-block">$$

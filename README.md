@@ -8,6 +8,9 @@ The motivating hypothesis is that a norm or regularization constraint should
 have a shadow price: relaxing the constraint should buy down risk, and extremely
 heavy L2 regularization should eventually collapse task capacity. This run is a
 local MNIST probe of that idea, not the final constrained-capacity experiment.
+The broader goal is to compare different regularizers as softened constraints in
+an ensemble/maxent picture, where norm, rank, sparsity, noise, and architecture
+bottlenecks can all be assigned conjugate fields.
 
 ## Current Read
 
