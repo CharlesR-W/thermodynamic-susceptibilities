@@ -1,0 +1,39 @@
+{
+  "seed": 0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "data_seed": 0,
+  "device": "cpu",
+  "profile": "dense-local",
+  "torch_version": "2.9.1+cu128",
+  "started_unix": 1783086835.3155935,
+  "neural_control_protocol": "scratch retrains; clustered log grid; fixed 3.0 epoch exposure; local derivatives in log2(N), log2(params), log10(weight_decay)",
+  "mnist_source": "/home/crw/Programming/Experiments/gradient_dmd/data/MNIST/raw",
+  "mnist_max_train": 50000,
+  "mnist_n_val": 5000,
+  "neural_config_count": 1617,
+  "neural_condition_count": 539,
+  "neural_seed_count": 3,
+  "elapsed_s": 975.0724444090001,
+  "tables": [
+    "kernel_best_ridge",
+    "kernel_data_pressure",
+    "kernel_optima",
+    "kernel_pressure_means",
+    "kernel_raw",
+    "kernel_regularization",
+    "neural_capacity_pressure",
+    "neural_data_pressure",
+    "neural_final",
+    "neural_final_by_seed",
+    "neural_local_derivatives",
+    "neural_pressure_means",
+    "neural_raw",
+    "neural_regularization",
+    "neural_specific_heat_summary",
+    "neural_time_pressure"
+  ]
+}

@@ -1,0 +1,15 @@
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ruff_cache/
+.agents/
+.codex/
+results/figures/kernel_*.png
+results/figures/spectra.png
+results/figures/neural_hysteresis.png
+results/figures/neural_pressures.png
+results/figures/neural_phase.png
+results/figures/neural_regularization_field.png
+results/tables/kernel_*.csv

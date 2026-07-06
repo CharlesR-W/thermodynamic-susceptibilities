@@ -1,0 +1,15 @@
+[project]
+name = "thermodynamics-pilot"
+version = "0.1.0"
+description = "Pilot sweeps for thermodynamic diagnostics of deep learning."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+  "pandas",
+  "matplotlib",
+  "plotly",
+  "torch",
+]
+
+[tool.ruff]
+line-length = 100
