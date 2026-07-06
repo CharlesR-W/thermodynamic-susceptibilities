@@ -21,7 +21,13 @@ where the usefulness of a control changes quickly.
 
 ## Open The Report
 
-The colleague-facing artifact is:
+The viewable GitHub Pages version is:
+
+```text
+https://charlesr-w.github.io/thermodynamic-susceptibilities/
+```
+
+The repository artifact is:
 
 ```text
 reports/thermo_phase_report.html
