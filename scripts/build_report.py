@@ -378,10 +378,9 @@ def plot_neural_phase_3d_isosurfaces() -> Path:
     n_ticks = tick_indices(len(n_coords))
     w_ticks = tick_indices(len(w_coords))
     lambda_ticks = tick_indices(len(lambda_coords), max_ticks=6)
-    raw_title = "MNIST 3D phase diagram: raw validation iso-loss shells"
+    raw_title = "MNIST 3D view: raw validation iso-loss shells"
     residual_title = (
-        "MNIST 3D phase diagram: balanced residual curvature "
-        "(additive axis trends removed)"
+        "MNIST 3D diagnostic: balanced residual after additive axis trends are removed"
     )
 
     fig.update_layout(
@@ -488,10 +487,10 @@ p {{ margin: 0 0 10px; max-width: 1120px; color: #5d6875; line-height: 1.42; }}
 <div class="wrap">
   <h1>MNIST 3D Iso-Loss Cutouts</h1>
   <p>Axes are normalized log coordinates for data size N, hidden width W, and positive weight decay
-  lambda, with tick labels in the original units. The default balanced residual mode subtracts
-  additive N, W, and lambda main effects to expose curvature/interactions; it is a diagnostic,
-  not literal loss. Use the Raw iso-loss R button for faithful smoothed tri-linear validation-CE
-  shells. Orthogonal slice planes are intentionally disabled.</p>
+  lambda, with tick labels in the original units. Use Raw iso-loss R for the faithful smoothed
+  validation-CE surface. The default balanced residual mode subtracts additive N, W, and lambda
+  main effects to make small interactions visible; it is a diagnostic visualization, not a
+  separate loss or phase diagram. Orthogonal slice planes are intentionally disabled.</p>
 </div>
 <div class="plot">{plot_div}</div>
 </body>
@@ -583,7 +582,7 @@ def plot_neural_envelope_susceptibilities() -> Path:
     )
     response_floor = max(float(np.nanmedian(sem) * 2.0), 0.006)
 
-    categories = ["unresolved", "data-limited", "capacity-limited", "nonmonotone/noisy"]
+    categories = ["unresolved", "data response", "capacity response", "mixed/noisy"]
     colors = ["#d9dee5", "#4c78a8", "#59a14f", "#e15759"]
     codes = np.zeros_like(risk, dtype=int)
     strongest_positive = np.maximum(h_data, h_capacity)
@@ -651,11 +650,11 @@ def plot_neural_envelope_susceptibilities() -> Path:
     axes[1, 1].set_yticklabels(ylabels)
     axes[1, 1].set_xlabel(r"data size $N$")
     axes[1, 1].set_ylabel(r"hidden width $W$")
-    axes[1, 1].set_title(r"Dominant lower-envelope response")
+    axes[1, 1].set_title(r"Largest lower-envelope response (thresholded)")
     handles = [Patch(facecolor=color, edgecolor="none", label=cat) for color, cat in zip(colors, categories)]
     axes[1, 1].legend(handles=handles, frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     fig.suptitle(
-        "Cleaner susceptibility object: optimize nuisance regularization, then differentiate",
+        "Post-hoc lower-envelope finite differences: descriptive capacity/data diagnostic",
         y=1.02,
         fontsize=15,
     )
@@ -847,10 +846,10 @@ def plot_neural_specific_heat_curves() -> Path:
     for ax in axes:
         ax.set_xlabel(r"weight decay $\lambda$")
         ax.legend(frameon=False, fontsize=8)
-    axes[0].set_title("Regularization response field")
-    axes[1].set_title("Regularization specific heat curve")
+    axes[0].set_title("Raw lambda response: weak and sign-sensitive")
+    axes[1].set_title("Second difference: low-confidence diagnostic")
     fig.suptitle(
-        r"Specific heat analogue: peaks mark rapid changes in regularization response",
+        r"Raw regularization finite differences: do not read these as discovered phase boundaries",
         y=1.03,
         fontsize=14,
     )
@@ -893,42 +892,6 @@ def plot_neural_loss_decomposition() -> Path:
     return savefig("neural_loss_decomposition.png")
 
 
-def plot_neural_dominant_response() -> Path:
-    df = load_table("neural_local_derivatives")
-    df = df[df["strategy"] == "scratch"].copy()
-    best = df.sort_values("val_loss").groupby(["n_train", "width"], as_index=False).head(1)
-    n_vals = sorted(best["n_train"].unique())
-    widths = sorted(best["width"].unique())
-    categories = [
-        "flat",
-        "data-limited",
-        "capacity-limited",
-        "under-regularized",
-        "over-regularized",
-    ]
-    colors = ["#d9dee5", "#4c78a8", "#59a14f", "#f28e2b", "#e15759"]
-    code = {name: i for i, name in enumerate(categories)}
-    pivot = (
-        best.assign(code=best["dominant_response"].map(code))
-        .pivot_table(index="width", columns="n_train", values="code", aggfunc="first")
-        .reindex(widths)
-        .loc[:, n_vals]
-    )
-    fig, ax = plt.subplots(figsize=(8.8, 4.8))
-    im = ax.imshow(pivot.to_numpy(), aspect="auto", cmap=ListedColormap(colors), vmin=0, vmax=4)
-    ax.set_xticks(range(len(n_vals)))
-    ax.set_xticklabels([str(n) for n in n_vals], rotation=35, ha="right")
-    ax.set_yticks(range(len(widths)))
-    ax.set_yticklabels([str(w) for w in widths])
-    ax.set_xlabel(r"data size $N$")
-    ax.set_ylabel(r"hidden width $W$")
-    ax.set_title(r"Dominant local response: $\arg\max_i |h_i|$ at best $\lambda$")
-    handles = [Patch(facecolor=c, edgecolor="none", label=cat) for c, cat in zip(colors, categories)]
-    ax.legend(handles=handles, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    fig.colorbar(im, ax=ax, fraction=0.035, ticks=[])
-    return savefig("neural_dominant_response.png")
-
-
 def inline_markdown(text: str) -> str:
     escaped = html.escape(text)
     escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
@@ -943,16 +906,38 @@ def markdown_to_html(markdown: str) -> str:
     in_code = False
     in_math = False
     block: list[str] = []
+    paragraph: list[str] = []
+    list_item: list[str] = []
+
+    def flush_paragraph() -> None:
+        nonlocal paragraph
+        if paragraph:
+            out.append(f"<p>{inline_markdown(' '.join(paragraph))}</p>")
+            paragraph = []
+
+    def flush_list_item() -> None:
+        nonlocal list_item
+        if list_item:
+            out.append(f"<li>{inline_markdown(' '.join(list_item))}</li>")
+            list_item = []
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            flush_list_item()
+            out.append("</ul>")
+            in_list = False
+
     for line in lines:
+        stripped = line.strip()
         if line.strip() == "$$":
             if in_math:
                 out.append('<div class="math-block">$$\n' + html.escape("\n".join(block)) + "\n$$</div>")
                 block = []
                 in_math = False
             else:
-                if in_list:
-                    out.append("</ul>")
-                    in_list = False
+                flush_paragraph()
+                close_list()
                 in_math = True
             continue
         if in_math:
@@ -964,31 +949,38 @@ def markdown_to_html(markdown: str) -> str:
                 block = []
                 in_code = False
             else:
-                if in_list:
-                    out.append("</ul>")
-                    in_list = False
+                flush_paragraph()
+                close_list()
                 in_code = True
             continue
         if in_code:
             block.append(line)
             continue
         if line.startswith("- "):
+            flush_paragraph()
             if not in_list:
                 out.append("<ul>")
                 in_list = True
-            out.append(f"<li>{inline_markdown(line[2:])}</li>")
+            flush_list_item()
+            list_item = [line[2:].strip()]
+            continue
+        if in_list and (line.startswith("  ") or line.startswith("\t")) and stripped:
+            list_item.append(stripped)
             continue
         if in_list:
-            out.append("</ul>")
-            in_list = False
+            close_list()
         if line.startswith("# "):
+            flush_paragraph()
             out.append(f"<h1>{inline_markdown(line[2:])}</h1>")
         elif line.startswith("## "):
+            flush_paragraph()
             out.append(f"<h2>{inline_markdown(line[3:])}</h2>")
-        elif line.strip():
-            out.append(f"<p>{inline_markdown(line)}</p>")
-    if in_list:
-        out.append("</ul>")
+        elif stripped:
+            paragraph.append(stripped)
+        else:
+            flush_paragraph()
+    flush_paragraph()
+    close_list()
     return "\n".join(out)
 
 
@@ -1036,6 +1028,58 @@ def metadata_summary_html(metadata: dict[str, object]) -> str:
     return "".join(items)
 
 
+def regularization_audit_summary_html(
+    neural_final: pd.DataFrame, neural_local: pd.DataFrame
+) -> str:
+    df = neural_final[neural_final["strategy"] == "scratch"].copy()
+    best = (
+        df.sort_values("val_loss")
+        .groupby(["n_train", "width"], as_index=False)
+        .head(1)
+        .reset_index(drop=True)
+    )
+    zero = df[np.isclose(df["weight_decay"], 0.0)][["n_train", "width", "val_loss"]].rename(
+        columns={"val_loss": "zero_loss"}
+    )
+    span = (
+        df.groupby(["n_train", "width"], as_index=False)
+        .agg(
+            lambda_span=("val_loss", lambda values: float(values.max() - values.min())),
+            median_sem=("val_loss_std", lambda values: float(np.nanmedian(values) / np.sqrt(3.0))),
+        )
+    )
+    audit = best.merge(zero, on=["n_train", "width"], how="left").merge(
+        span, on=["n_train", "width"], how="left"
+    )
+    audit["gain_vs_zero"] = audit["zero_loss"] - audit["val_loss"]
+    audit["gain_snr"] = audit["gain_vs_zero"] / audit["median_sem"].replace(0, np.nan)
+    frac_snr = float(np.nanmean(np.abs(audit["gain_snr"]) > 2.0))
+    median_gain_mce = float(1000.0 * np.nanmedian(audit["gain_vs_zero"]))
+    median_span_mce = float(1000.0 * np.nanmedian(audit["lambda_span"]))
+
+    pos = neural_local[
+        (neural_local["strategy"] == "scratch") & (neural_local["weight_decay"] > 0)
+    ].copy()
+    h_n = float(np.nanmedian(pos["h_data_per_doubling"].abs()))
+    h_p = float(np.nanmedian(pos["h_capacity_per_doubling"].abs()))
+    h_l = float(np.nanmedian(pos["h_regularization_per_decade"].abs()))
+    wd_values = sorted(float(v) for v in df["weight_decay"].unique())
+    positive_wd = [v for v in wd_values if v > 0]
+    wd_range = f"{fmt_float(min(positive_wd))} to {fmt_float(max(positive_wd))}"
+
+    rows = [
+        ("positive weight-decay range", wd_range),
+        ("median tuning gain vs lambda=0", f"{median_gain_mce:.2f} mCE"),
+        ("median full lambda span", f"{median_span_mce:.2f} mCE"),
+        ("cells with |gain/SE| > 2", f"{100 * frac_snr:.1f}%"),
+        ("median |h_N|, |h_P|, |h_lambda|", f"{h_n:.3g}, {h_p:.3g}, {h_l:.3g}"),
+    ]
+    return "".join(
+        f"<li><b>{html.escape(label)}</b>: {html.escape(value)}</li>"
+        for label, value in rows
+    )
+
+
 def build_html(figures: dict[str, Path]) -> str:
     spec_html = markdown_to_html((ROOT / "docs" / "spec.md").read_text(encoding="utf-8"))
     metadata = json.loads((ROOT / "results" / "raw" / "run_metadata.json").read_text())
@@ -1048,6 +1092,7 @@ def build_html(figures: dict[str, Path]) -> str:
     }
     neural_phase_3d_src = html.escape(relative_report_path(figures["neural_phase_3d"]))
     metadata_bits = metadata_summary_html(metadata)
+    reg_audit_bits = regularization_audit_summary_html(neural_final, neural_local)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -1115,7 +1160,7 @@ section.tab {{ display: none; }}
 section.tab.active {{ display: block; }}
 .grid {{
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   gap: 18px;
   align-items: start;
 }}
@@ -1137,12 +1182,27 @@ section.tab.active {{ display: block; }}
   background: #ffffff;
 }}
 .note {{ color: var(--muted); line-height: 1.5; }}
+.lead {{ font-size: 17px; line-height: 1.56; }}
 .callout {{
   border-left: 4px solid var(--accent);
   padding: 10px 12px;
   background: #f2f5f9;
   color: var(--ink);
 }}
+.warning {{
+  border-left-color: #b85b2b;
+  background: #fff4ed;
+}}
+.formula {{
+  overflow-x: auto;
+  background: #f0f3f6;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  line-height: 1.45;
+}}
+.metric-list, .plot-list {{ padding-left: 20px; }}
+.plot-list li, .metric-list li {{ margin-bottom: 8px; line-height: 1.45; }}
 code {{
   background: #eef1f5;
   border: 1px solid #dce2e8;
@@ -1175,7 +1235,7 @@ pre, .math-block {{
 <body>
 <header>
   <h1>Thermodynamic Susceptibilities for Learning</h1>
-  <p>A dense MNIST retrain grid read through normalized response fields <code>h_i</code> and specific-heat-like curves <code>C_i</code>. The report is about where validation risk is locally sensitive to data, width, and weight decay.</p>
+  <p>A finite MNIST test of whether Lagrange-multiplier-like responses can define a useful notion of neural-network capacity. The short version: data and width responses are real in this sweep; the direct L2/weight-decay signal is too weak here to support a clean capacity-collapse story.</p>
 </header>
 <nav>
   <button class="active" data-tab="overview">Overview</button>
@@ -1188,22 +1248,46 @@ pre, .math-block {{
 <main>
 <section id="overview" class="tab active">
   <div class="grid">
+    <div class="panel wide">
+      <h3>What This Is Testing</h3>
+      <p class="lead">The motivating idea is to define neural-network capacity by a constrained optimization problem, then read the Lagrange multiplier as a susceptibility or shadow price. If a norm budget is a real capacity constraint, tightening that budget should eventually make the task impossible; in the extreme, very heavy L2 regularization should collapse the network toward a near-zero/constant predictor and drive task capacity to zero.</p>
+      <p class="lead">This MNIST run is a small empirical probe of that idea. It asks whether validation risk has a stable response to data size, hidden width, and weight decay, and whether the weight-decay direction has enough signal to behave like a meaningful capacity field.</p>
+    </div>
     <div class="panel">
-      <h3>Current Read</h3>
-      <p class="callout">The robust object in this finite sweep is the lower envelope over weight decay. Data and capacity responses remain visible there; the direct weight-decay response is weak enough that raw regularization-specific heat should be treated as an audit, not the main result.</p>
+      <h3>Mathematical Context</h3>
+      <p class="note">A clean capacity story would start with a norm budget <code>B</code> and a constrained risk:</p>
+      <div class="formula">$$R^*(B)=\\min_{{\\lVert w\\rVert_2^2\\le B}} R(w),\\qquad \\mu^*(B)=-\\frac{{dR^*}}{{dB}}.$$</div>
+      <p class="note">Here <code>mu*</code> is the shadow price of capacity: how much validation risk would fall if the allowed norm budget were relaxed. A penalty form <code>R(w)+lambda ||w||^2/2</code> is the Lagrangian proxy, so the response to <code>lambda</code> should reveal whether norm is acting like a real capacity bottleneck.</p>
+    </div>
+    <div class="panel">
+      <h3>Empirical Proxy</h3>
+      <p class="note">The actual sweep measures validation cross-entropy <code>R(N,W,lambda)</code> after scratch retraining. The plotted fields are finite differences in log coordinates:</p>
+      <div class="formula">$$\\begin{{aligned}}h_N&=-\\frac{{\\partial R}}{{\\partial\\log_2 N}},\\\\h_P&=-\\frac{{\\partial R}}{{\\partial\\log_2 P}},\\\\h_\\lambda&=-\\frac{{\\partial R}}{{\\partial\\log_{{10}}\\lambda}}.\\end{{aligned}}$$</div>
+      <p class="note">Positive <code>h_N</code> means another data doubling helps. Positive <code>h_P</code> means another parameter doubling helps. Positive <code>h_lambda</code> means stronger weight decay helps locally; negative <code>h_lambda</code> means it hurts.</p>
+    </div>
+    <div class="panel wide">
+      <h3>Current Verdict</h3>
+      <p class="callout warning">This sweep does not yet support the strong claim that weight decay provides a clean Lagrange-multiplier definition of capacity. Data and width effects are much larger than the direct <code>lambda</code> effect, and the regularization gains are often at the scale of seed noise.</p>
+      <p class="note">That is still useful: it says the next experiment should test the capacity hypothesis more directly, with a wider norm/regularization path, an optimizer/objective that matches the Lagrangian being interpreted, and a predeclared rule for when a regularization ridge counts as real.</p>
+    </div>
+    <div class="panel">
+      <h3>Regularization Audit Numbers</h3>
+      <ul class="metric-list">{reg_audit_bits}</ul>
+      <p class="note">The current maximum positive weight decay is not "super-heavy" L2. It is a local probe, so a missing capacity collapse here should be read as "not tested yet," not as evidence against the limiting idea.</p>
     </div>
     <div class="panel">
       <h3>Run Metadata</h3>
-      <ul>{metadata_bits}</ul>
+      <ul class="metric-list">{metadata_bits}</ul>
     </div>
-    <div class="panel">
-      <h3>Reading Rule</h3>
-      <p class="note">The empirical potential is validation risk <code>R</code>. The field <code>h_i=-dR/dtheta_i</code> is a normalized local response. The specific heat analogue <code>C_i=|dh_i/dtheta_i|</code> peaks where the usefulness of a control changes rapidly.</p>
-      <p class="note">For MNIST, <code>theta_N=log2 N</code>, <code>theta_P=log2 P</code>, and <code>theta_lambda=log10 lambda</code>. This means data and width are compared per doubling, while regularization is compared per decade.</p>
-    </div>
-    <div class="panel">
-      <h3>Scope</h3>
-      <p class="note">This is a CPU-sized design probe with three scratch seeds per condition, not a thermodynamic-limit claim. The older Fourier-kernel calibration results are omitted from this sendable report to keep the story focused on the neural sweep.</p>
+    <div class="panel wide">
+      <h3>How To Read The Plots</h3>
+      <ul class="plot-list">
+        <li><b>Dense MNIST phase surface</b>: the most literal plot. Each heatmap fixes weight decay and shows validation cross-entropy over data size and width. If the panels look similar across <code>lambda</code>, that is a result.</li>
+        <li><b>Regularization signal audit</b>: the key honesty check for the L2-capacity hypothesis. It asks whether tuning weight decay beats <code>lambda=0</code> by more than seed noise and whether <code>h_lambda</code> is on the same scale as data/width responses.</li>
+        <li><b>Envelope susceptibilities</b>: useful but post-hoc. It first chooses the best <code>lambda</code> for each <code>(N,W)</code>, then differentiates the lower envelope. This describes what data or width still buys after regularization tuning; it is not independent evidence for a regularization phase boundary.</li>
+        <li><b>Raw lambda finite differences</b>: low-confidence diagnostic. They are included to show the failure mode: second derivatives of a weak signal can produce attractive-looking bumps that should not be promoted into discoveries.</li>
+        <li><b>3D residual view</b>: visualization only. The default residual mode subtracts additive main effects so small interactions can be seen, but it is not a literal loss surface.</li>
+      </ul>
     </div>
   </div>
 </section>
@@ -1214,17 +1298,17 @@ pre, .math-block {{
   <div class="grid">
     <div class="panel wide">
       <h3>Dense MNIST Phase Surface</h3>
-      <p class="note">Each panel fixes weight decay and shows <code>R(N,P;lambda)</code>, the validation cross-entropy after scratch retraining. Darker/lower-loss basins are not the full story: the susceptibility plots show where this surface bends sharply.</p>
+      <p class="note">Each small heatmap fixes weight decay <code>lambda</code>. The horizontal axis is data size <code>N</code>, the vertical axis is hidden width <code>W</code>, and color is validation cross-entropy after scratch retraining. Lower values are better. The main visible pattern is ordinary learning: more data and more width usually reduce risk. The panels being very similar across <code>lambda</code> is exactly why the regularization-capacity claim is weak in this run.</p>
       <img class="figure" src="{fig_html['neural_phase']}">
     </div>
     <div class="panel wide">
       <h3>3D Iso-Loss Cutouts</h3>
-      <p class="note">This separate interactive plot puts the three MNIST controls on normalized log axes, with ticks shown in original units. It opens in <b>Balanced curvature residual</b> mode, which subtracts additive <code>N</code>, <code>W</code>, and <code>lambda</code> main effects so that smaller regularization-direction curvature is visible. The <b>Raw iso-loss R</b> button restores the faithful validation-CE phase surface. The residual mode is diagnostic, not literal loss. Orthogonal slice planes are disabled; the visible sheets are iso-surfaces.</p>
+      <p class="note">This interactive view puts <code>N</code>, <code>W</code>, and positive <code>lambda</code> on normalized log axes. Start with the <b>Raw iso-loss R</b> button if you want the faithful smoothed validation-CE surface. The default <b>Balanced curvature residual</b> mode subtracts additive axis trends, making small interactions visible only after the dominant data/width effects have been removed. Treat that residual as a visualization normalization, not as evidence for a new thermodynamic state variable.</p>
       <iframe class="interactive-figure" src="{neural_phase_3d_src}" title="MNIST 3D interpolated iso-loss surfaces"></iframe>
     </div>
     <div class="panel wide">
       <h3>Loss Decomposition</h3>
-      <p class="note">The blue bar is the real validation cross-entropy. The orange bar is the measured diagnostic L2 term <code>lambda ||w||^2 / 2</code> for the trained model. Because training uses AdamW, this decomposition is a reporting diagnostic rather than the exact optimized objective.</p>
+      <p class="note">The blue bar is the real validation cross-entropy at the largest data size. The orange bar is the measured diagnostic term <code>lambda ||w||^2 / 2</code> for the trained model. This is the plot closest to the intended capacity story: if L2 were made extremely strong, this term should force a small-norm/low-capacity model. But this run uses AdamW, where weight decay is decoupled from the gradient of an additive penalty, so the orange bar is a sanity check rather than the exact optimized Lagrangian.</p>
       <img class="figure" src="{fig_html['neural_loss_decomp']}">
     </div>
     <div class="panel">
@@ -1233,7 +1317,7 @@ pre, .math-block {{
     </div>
     <div class="panel">
       <h3>Best Local Responses</h3>
-      {small_table(neural_local, ['n_train','width','weight_decay','val_loss','h_data_per_doubling','h_capacity_per_doubling','h_regularization_per_decade','dominant_response'], n=10)}
+      {small_table(neural_local, ['n_train','width','weight_decay','val_loss','h_data_per_doubling','h_capacity_per_doubling','h_regularization_per_decade'], n=10)}
     </div>
   </div>
 </section>
@@ -1241,26 +1325,21 @@ pre, .math-block {{
   <div class="grid">
     <div class="panel wide">
       <h3>Current Read</h3>
-      <p class="callout">The clean object in this sweep is not the raw regularization second derivative. The lower envelope over <code>lambda</code> still has a strong data/capacity response, while the direct <code>lambda</code> response is usually tiny compared with seed noise. So the smarter read is: first optimize nuisance regularization, then ask which remaining control changes risk.</p>
+      <p class="callout warning">The clean capacity result is not here yet. The lower envelope over <code>lambda</code> still has meaningful data/width responses, but the direct weight-decay response is too small and noisy to justify a raw regularization-specific-heat story.</p>
     </div>
     <div class="panel wide">
       <h3>Envelope Susceptibilities</h3>
-      <p class="note">This plot uses <code>R*(N,W)=min_lambda R(N,W,lambda)</code>. It treats regularization as a nuisance control, then estimates data and capacity response on the lower envelope. This is less noisy and better matched to the current MNIST regime.</p>
+      <p class="note">This plot uses <code>R*(N,W)=min_lambda R(N,W,lambda)</code>. Top left is the best observed validation loss after choosing the best weight decay at each <code>(N,W)</code>. Top right estimates the risk decrease per data doubling. Bottom left estimates the risk decrease per parameter/width doubling. Bottom right assigns a thresholded descriptive label. Because <code>lambda</code> is optimized before differentiating, this is a post-hoc summary of the best surface, not a proof that regularization defines capacity.</p>
       <img class="figure" src="{fig_html['neural_envelope_suscept']}">
     </div>
     <div class="panel wide">
       <h3>Regularization Signal Audit</h3>
-      <p class="note">This asks whether weight decay has enough signal to support a phase-boundary story. The answer in this run is mostly no: tuning <code>lambda</code> matters a little, but the raw <code>h_lambda</code> scale is far below data/capacity response.</p>
+      <p class="note">This is the main guardrail against cherry-picked structure. The panels ask four plain questions: which <code>lambda</code> wins, how much it beats <code>lambda=0</code>, whether that gain is bigger than seed standard error, and how the response scale compares with data and width. The answer is sobering: tuning weight decay helps a little in some cells, but the effect is usually tiny relative to the data/width directions.</p>
       <img class="figure" src="{fig_html['neural_reg_audit']}">
     </div>
     <div class="panel wide">
-      <h3>Dominant Local Constraint</h3>
-      <p class="note">At each <code>(N,W)</code>, the map chooses the lowest-loss regularization cell and labels whichever normalized response has the largest magnitude. It is a local response label, not a permanent ontology.</p>
-      <img class="figure" src="{fig_html['neural_dominant']}">
-    </div>
-    <div class="panel wide">
       <h3>Raw λ Finite Differences</h3>
-      <p class="note">This is the old regularization-specific-heat view. It is retained as a cautionary diagnostic: differentiating a weak, noisy <code>lambda</code> response amplifies small seed and interpolation artifacts.</p>
+      <p class="note">The left panel is the median local response to a decade change in weight decay. The right panel is the finite-difference second derivative of that response. These curves are useful mainly as a warning: the signal is weak, sign-sensitive, and edge-sensitive, so attractive-looking bumps should not be read as discovered phase boundaries.</p>
       <img class="figure" src="{fig_html['neural_specific_heat']}">
     </div>
   </div>
@@ -1269,8 +1348,8 @@ pre, .math-block {{
   <div class="grid">
     <div class="panel">
       <h3>Toward 10^5 Runs</h3>
-      <p class="note">The right remote experiment is sharded scratch retraining with clustered log grids, not a uniform Cartesian slab. Use 3-5 seeds, 20-30 data sizes, 20-30 widths, 15-25 regularization values, 3-5 optimizer settings, and either sparse time checkpoints or an early-stop envelope.</p>
-      <p class="note">The first remote shard should be 10^3-10^4 runs to check that the derivative peaks survive seeds and protocol choices before spending the full budget.</p>
+      <p class="note">The next experiment should be predeclared around the capacity hypothesis: choose whether <code>lambda</code> is an additive L2 penalty, decoupled AdamW decay, or an explicit norm constraint; then sweep far enough that the small-norm collapse is actually in range.</p>
+      <p class="note">A useful remote run would be sharded scratch retraining with clustered log grids: 3-5 seeds, 20-30 data sizes, 20-30 widths, 15-25 regularization values, a few optimizer settings, and either sparse time checkpoints or an early-stop envelope. Start with 10^3-10^4 runs to verify derivative stability before spending the full 10^5-run budget.</p>
     </div>
     <div class="panel">
       <h3>Free Energy</h3>
@@ -1282,7 +1361,8 @@ pre, .math-block {{
   <div class="panel">
     <h3>What This Does and Does Not Show</h3>
     <p>The Legendre/susceptibility language is exact only after the coarse observable and conjugate family have been fixed. For neural networks, it is an empirical diagnostic: useful if it compresses training behavior and predicts transitions, but not evidence by itself that the network has a unique thermodynamic state variable.</p>
-    <p>The dense local run averages three scratch seeds per condition under fixed 3-epoch exposure. Treat ridges as candidates. The next meaningful check is quasi-equilibrium early stopping and richer observables such as empirical NTK drift, representation CKA, or activation-spectrum order parameters.</p>
+    <p>This run does not test literal "super-heavy L2 implies zero capacity." The largest positive weight decay is modest, training uses AdamW rather than an additive L2 objective, and there is no explicit norm-budget solve. The report should therefore be read as a failed/negative local signal for the regularization phase-boundary story, not as a final verdict on constrained-capacity definitions.</p>
+    <p>The dense local run averages three scratch seeds per condition under fixed 3-epoch exposure. Treat any ridges as candidates. The next meaningful check is a predeclared constrained or additive-L2 sweep, quasi-equilibrium early stopping, and richer observables such as empirical NTK drift, representation CKA, or activation-spectrum order parameters.</p>
   </div>
 </section>
 </main>
@@ -1310,7 +1390,6 @@ def main() -> None:
         "neural_reg_audit": plot_neural_regularization_audit(),
         "neural_specific_heat": plot_neural_specific_heat_curves(),
         "neural_loss_decomp": plot_neural_loss_decomposition(),
-        "neural_dominant": plot_neural_dominant_response(),
     }
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(build_html(figures), encoding="utf-8")

@@ -1,23 +1,26 @@
 # Thermodynamic Susceptibilities for Learning
 
-This repository contains a small MNIST pilot for reading learning systems through
-local response fields rather than only through final validation loss.
+This repository contains a small MNIST pilot for asking whether neural-network
+capacity can be read through Lagrange-multiplier-like response fields rather
+than only through final validation loss.
 
-The current report asks a narrow question: if we perturb data size, hidden width,
-or weight decay, where does validation risk move sharply? The analogy is to a
-specific heat curve: the interesting signal is not just the loss surface, but
-where the usefulness of a control changes quickly.
+The motivating hypothesis is that a norm or regularization constraint should
+have a shadow price: relaxing the constraint should buy down risk, and extremely
+heavy L2 regularization should eventually collapse task capacity. This run is a
+local MNIST probe of that idea, not the final constrained-capacity experiment.
 
 ## Current Read
 
-- The cleanest object in this run is the lower envelope over weight decay,
-  `R*(N,W)=min_lambda R(N,W,lambda)`.
-- Data and capacity responses remain visible on that envelope.
+- Data and width responses are visible and interpretable in this sweep.
 - The direct weight-decay response is much smaller and often comparable to seed
-  noise, so the report treats raw regularization "specific heat" as a diagnostic
-  audit rather than the main result.
-- The result is a finite-sweep design probe, not a claim that the network has a
-  literal thermodynamic state variable.
+  noise, so the report treats raw regularization "specific heat" as a cautionary
+  diagnostic rather than as evidence for a phase boundary.
+- The lower envelope `R*(N,W)=min_lambda R(N,W,lambda)` is useful as a post-hoc
+  descriptive surface, but not independent evidence that regularization defines
+  capacity.
+- The current result is therefore negative/inconclusive for the strong
+  Lagrange-multiplier capacity story. A real test needs additive L2 or explicit
+  norm constraints, a wider regularization path, and predeclared thresholds.
 
 ## Open The Report
 
